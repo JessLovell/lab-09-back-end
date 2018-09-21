@@ -20,6 +20,7 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelp);
 app.get('/movies', getMovie);
+app.get('/trails', getTrail);
 
 app.listen(PORT, () => console.log(`Listsening on ${PORT}`));
 
@@ -63,10 +64,12 @@ let lookup = function(options) {
 Weather.lookup = lookup;
 Yelp.lookup = lookup;
 Movie.lookup = lookup;
+Trail.lookup = lookup;
 
 Weather.deleteByLocationId = deleteByLocationId;
 Yelp.deleteByLocationId = deleteByLocationId;
 Movie.deleteByLocationId = deleteByLocationId;
+Trail.deleteByLocationId = deleteByLocationId;
 
 function getWeather (request, response) {
   Weather.lookup({
@@ -154,6 +157,15 @@ function getMovie (request, response) {
       }
     }
   });
+}
+
+function getTrail (request, response, query) {
+  Trail.lookup({
+    tableName: Trail.tableName,
+    cacheMiss: function () {
+      const url = `https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=${process.env.HIKING_API_KEY}`;
+    }
+  })
 }
 
 function handleError (error, response) {
