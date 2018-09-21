@@ -212,7 +212,7 @@ function Weather (day) {
 
 Weather.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (forecast, time, location_id) VALUES ($1, $2, $3, $4);`;
+    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
     const values = [this.forecast, this.time, this.created_at, location_id];
     client.query(SQL, values);
   }
@@ -220,16 +220,24 @@ Weather.prototype = {
 
 Yelp.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5);`;
-    const values = [this.name, this.image_url, this.price, this.rating, this.url, location_id];
+    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+    const values = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
     client.query(SQL, values);
   }
 }
 
 Movie.prototype = {
   save: function(location_id) {
-    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`;
-    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, location_id];
+    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Trail.prototype = {
+  save: function(location_id){
+    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`;
+    const values = [this.name, this.location, this.length, this.stars, this.star_votes, this.summary, this.trail_url, this.conditions, this.condition_date, this.condition_time, this.created_at, location_id];
     client.query(SQL, values);
   }
 }
@@ -237,6 +245,7 @@ Movie.prototype = {
 Weather.tableName = 'weathers';
 Yelp.tableName = 'yelps';
 Movie.tableName = 'movies';
+Trail.tableName = 'trails';
 
 function Yelp (food) {
   this.tableName = 'yelps';
@@ -249,6 +258,7 @@ function Yelp (food) {
 }
 
 function Movie (film) {
+  this.tableName = 'movies';
   this.title = film.title;
   this.overview = film.overview;
   this.average_votes = film.vote_average;
@@ -256,4 +266,20 @@ function Movie (film) {
   this.image_url = `https://image.tmdb.org/t/p/w500${film.poster_path}`;
   this.popularity = film.popularity;
   this.released_on = film.release_date;
+  this.created_at = Date.now();
+}
+
+function Trail (hike) {
+  this.tableName = 'trails'
+  // this.name = hike.
+  // this.location = hike.
+  // this.length = hike.
+  // this.stars = hike.
+  // this.star_votes = hike. 
+  // this.summary = hike. 
+  // this.trail_url = hike. 
+  // this.conditions = hike. 
+  // this.condition_date = hike. 
+  // this.condition_time = hike. 
+  // this.created_at = Date.now();
 }
