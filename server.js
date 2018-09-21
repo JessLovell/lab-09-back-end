@@ -159,11 +159,31 @@ function getMovie (request, response) {
   });
 }
 
-function getTrail (request, response, query) {
+function getTrail (request, response) {
   Trail.lookup({
     tableName: Trail.tableName,
     cacheMiss: function () {
-      const url = `https://www.hikingproject.com/data/get-trails?lat=40.0274&lon=-105.2519&maxDistance=10&key=${process.env.HIKING_API_KEY}`;
+      const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.HIKING_API_KEY}`;
+
+      superagent.get(url)
+        .then(result => {
+          const trailSummaries = result.body.trails.map( trail => {
+            let summary = new Trail(trail); 
+            summary.save(request.query.data.id);
+            return summary;
+          })
+          response.send(trailSummaries);
+        })
+        .catch(error => handleError(error, response));
+    }, 
+    cacheHit: function(resultsArray) {
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
+      if (ageOfResultsInMinutes > 60) {
+        Trail.deleteByLocationId(Trail.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
     }
   })
 }
@@ -248,7 +268,7 @@ Movie.prototype = {
 
 Trail.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`;
+    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) LIMIT 5;`;
     const values = [this.name, this.location, this.length, this.stars, this.star_votes, this.summary, this.trail_url, this.conditions, this.condition_date, this.condition_time, this.created_at, location_id];
     client.query(SQL, values);
   }
@@ -283,15 +303,15 @@ function Movie (film) {
 
 function Trail (hike) {
   this.tableName = 'trails'
-  // this.name = hike.
-  // this.location = hike.
-  // this.length = hike.
-  // this.stars = hike.
-  // this.star_votes = hike. 
-  // this.summary = hike. 
-  // this.trail_url = hike. 
-  // this.conditions = hike. 
-  // this.condition_date = hike. 
-  // this.condition_time = hike. 
-  // this.created_at = Date.now();
+  this.name = hike.name;
+  this.location = hike.location;
+  this.length = hike.length;
+  this.stars = hike.stars;
+  this.star_votes = hike.starVotes;
+  this.summary = hike.summary;
+  this.trail_url = hike.url;
+  this.conditions = hike.conditionDetails;
+  this.condition_date = hike.conditionDate.split(' ')[0];
+  this.condition_time = hike.conditionDate.split(' ')[1];
+  this.created_at = Date.now();
 }
