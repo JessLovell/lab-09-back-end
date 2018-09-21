@@ -20,6 +20,7 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelp);
 app.get('/movies', getMovie);
+app.get('/trails', getTrail);
 
 app.listen(PORT, () => console.log(`Listsening on ${PORT}`));
 
@@ -63,10 +64,12 @@ let lookup = function(options) {
 Weather.lookup = lookup;
 Yelp.lookup = lookup;
 Movie.lookup = lookup;
+Trail.lookup = lookup;
 
 Weather.deleteByLocationId = deleteByLocationId;
 Yelp.deleteByLocationId = deleteByLocationId;
 Movie.deleteByLocationId = deleteByLocationId;
+Trail.deleteByLocationId = deleteByLocationId;
 
 function getWeather (request, response) {
   Weather.lookup({
@@ -156,6 +159,35 @@ function getMovie (request, response) {
   });
 }
 
+function getTrail (request, response) {
+  Trail.lookup({
+    tableName: Trail.tableName,
+    cacheMiss: function () {
+      const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.HIKING_API_KEY}`;
+
+      superagent.get(url)
+        .then(result => {
+          const trailSummaries = result.body.trails.map( trail => {
+            let summary = new Trail(trail); 
+            summary.save(request.query.data.id);
+            return summary;
+          })
+          response.send(trailSummaries);
+        })
+        .catch(error => handleError(error, response));
+    }, 
+    cacheHit: function(resultsArray) {
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
+      if (ageOfResultsInMinutes > 60) {
+        Trail.deleteByLocationId(Trail.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  })
+}
+
 function handleError (error, response) {
   console.error(error);
   if(response) return response.status(500).send('Sorry something went terribly wrong.');
@@ -212,7 +244,7 @@ function Weather (day) {
 
 Weather.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (forecast, time, location_id) VALUES ($1, $2, $3, $4);`;
+    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
     const values = [this.forecast, this.time, this.created_at, location_id];
     client.query(SQL, values);
   }
@@ -220,16 +252,24 @@ Weather.prototype = {
 
 Yelp.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5);`;
-    const values = [this.name, this.image_url, this.price, this.rating, this.url, location_id];
+    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+    const values = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
     client.query(SQL, values);
   }
 }
 
 Movie.prototype = {
   save: function(location_id) {
-    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`;
-    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, location_id];
+    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Trail.prototype = {
+  save: function(location_id){
+    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) LIMIT 5;`;
+    const values = [this.name, this.location, this.length, this.stars, this.star_votes, this.summary, this.trail_url, this.conditions, this.condition_date, this.condition_time, this.created_at, location_id];
     client.query(SQL, values);
   }
 }
@@ -237,6 +277,7 @@ Movie.prototype = {
 Weather.tableName = 'weathers';
 Yelp.tableName = 'yelps';
 Movie.tableName = 'movies';
+Trail.tableName = 'trails';
 
 function Yelp (food) {
   this.tableName = 'yelps';
@@ -249,6 +290,7 @@ function Yelp (food) {
 }
 
 function Movie (film) {
+  this.tableName = 'movies';
   this.title = film.title;
   this.overview = film.overview;
   this.average_votes = film.vote_average;
@@ -256,4 +298,20 @@ function Movie (film) {
   this.image_url = `https://image.tmdb.org/t/p/w500${film.poster_path}`;
   this.popularity = film.popularity;
   this.released_on = film.release_date;
+  this.created_at = Date.now();
+}
+
+function Trail (hike) {
+  this.tableName = 'trails'
+  this.name = hike.name;
+  this.location = hike.location;
+  this.length = hike.length;
+  this.stars = hike.stars;
+  this.star_votes = hike.starVotes;
+  this.summary = hike.summary;
+  this.trail_url = hike.url;
+  this.conditions = hike.conditionDetails;
+  this.condition_date = hike.conditionDate.split(' ')[0];
+  this.condition_time = hike.conditionDate.split(' ')[1];
+  this.created_at = Date.now();
 }
