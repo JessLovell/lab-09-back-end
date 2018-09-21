@@ -168,14 +168,14 @@ function getTrail (request, response) {
       superagent.get(url)
         .then(result => {
           const trailSummaries = result.body.trails.map( trail => {
-            let summary = new Trail(trail); 
+            let summary = new Trail(trail);
             summary.save(request.query.data.id);
             return summary;
           })
           response.send(trailSummaries);
         })
         .catch(error => handleError(error, response));
-    }, 
+    },
     cacheHit: function(resultsArray) {
       let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
       if (ageOfResultsInMinutes > 60) {
