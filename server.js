@@ -20,6 +20,7 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelp);
 app.get('/movies', getMovie);
+app.get('/meetup', getMeetup);
 app.get('/trails', getTrail);
 
 app.listen(PORT, () => console.log(`Listsening on ${PORT}`));
@@ -64,11 +65,13 @@ let lookup = function(options) {
 Weather.lookup = lookup;
 Yelp.lookup = lookup;
 Movie.lookup = lookup;
+Meetup.lookup = lookup;
 Trail.lookup = lookup;
 
 Weather.deleteByLocationId = deleteByLocationId;
 Yelp.deleteByLocationId = deleteByLocationId;
 Movie.deleteByLocationId = deleteByLocationId;
+Meetup.deleteByLocationId = deleteByLocationId;
 Trail.deleteByLocationId = deleteByLocationId;
 
 function getWeather (request, response) {
@@ -158,6 +161,31 @@ function getMovie (request, response) {
     }
   });
 }
+
+
+function getMeetup (request, response) {
+  Meetup.lookup ({
+    tableName: Meetup.tableName,
+    cacheMiss: function () {
+      const url = `https://api.meetup.com/find/upcoming_events?&sign=true&photo-host=public&lon=${request.query.data.longitude}&page=20&lat=${request.query.data.latitude}&key=${process.env.MEETUP_API_KEY}`;
+
+      console.log('in the cacheMiss');
+      superagent.get(url)
+        .then((result) => {
+          const meetupSummaries = result.body.events.map( event => {
+            let summary = new Meetup(event);
+            summary.save(request.query.data.id);
+            return summary;
+          })
+          response.send(meetupSummaries);
+        })
+        .catch(error => handleError(error, response));
+    },
+    cacheHit: function (resultsArray) {
+      console.log('in the cacheHit');
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
+      if (ageOfResultsInMinutes > 10080) {
+        Meetup.deleteByLocationId(Meetup.tableName, request.query.data.id);
 
 function getTrail (request, response) {
   Trail.lookup({
@@ -274,9 +302,18 @@ Trail.prototype = {
   }
 }
 
+Meetup.prototype = {
+  save: function(location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
+    const values = [this.link, this.name, this.creation_date, this.host, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
 Weather.tableName = 'weathers';
 Yelp.tableName = 'yelps';
 Movie.tableName = 'movies';
+Meetup.tableName = 'meetups';
 Trail.tableName = 'trails';
 
 function Yelp (food) {
@@ -314,4 +351,12 @@ function Trail (hike) {
   this.condition_date = hike.conditionDate.split(' ')[0];
   this.condition_time = hike.conditionDate.split(' ')[1];
   this.created_at = Date.now();
+}
+
+function Meetup (event) {
+  this.tableName = 'meetups';
+  this.link = event.link;
+  this.name = event.name;
+  this.creation_date = event.creation_date;
+  this.host = event.host;
 }
