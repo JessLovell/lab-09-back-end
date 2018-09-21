@@ -1,11 +1,11 @@
-DROP TABLE locations, weathers, yelps, movies;
+DROP TABLE locations, weathers, yelps, movies, meetups;
 
 CREATE TABLE IF NOT EXISTS locations ( 
   id SERIAL PRIMARY KEY, 
   search_query VARCHAR(255), 
   formatted_query VARCHAR(255), 
-  latitude NUMERIC(8, 6), 
-  longitude NUMERIC(9, 6) 
+  latitude NUMERIC(18, 4), 
+  longitude NUMERIC(18, 4)
 );
 
 CREATE TABLE IF NOT EXISTS weathers ( 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS yelps (
   name VARCHAR (255),
   image_url TEXT,
   price VARCHAR (4),
-  rating NUMERIC(2, 1),
+  rating NUMERIC(18, 4),
   url TEXT,
   created_at BIGINT,
   location_id INTEGER NOT NULL REFERENCES locations(id) 
@@ -31,11 +31,22 @@ CREATE TABLE IF NOT EXISTS movies (
   id SERIAL PRIMARY KEY,
   title VARCHAR (255),
   overview TEXT,
-  average_votes NUMERIC(2,1),
+  average_votes NUMERIC(18, 4),
   total_votes SMALLINT,
   image_url TEXT,
-  popularity NUMERIC (6, 3),
+  popularity NUMERIC(18, 4),
   released_on VARCHAR (10),
   created_at BIGINT,
   location_id INTEGER NOT NULL REFERENCES locations(id) 
 );
+
+CREATE TABLE IF NOT EXISTS meetups (
+  id SERIAL PRIMARY KEY,
+  link TEXT,
+  name VARCHAR (255),
+  creation_date VARCHAR (255),
+  host VARCHAR (255),
+  created_at BIGINT,
+  location_id INTEGER NOT NULL REFERENCES locations(id)
+);
+

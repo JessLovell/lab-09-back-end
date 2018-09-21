@@ -20,6 +20,7 @@ app.get('/location', getLocation);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelp);
 app.get('/movies', getMovie);
+app.get('/meetup', getMeetup);
 
 app.listen(PORT, () => console.log(`Listsening on ${PORT}`));
 
@@ -63,10 +64,12 @@ let lookup = function(options) {
 Weather.lookup = lookup;
 Yelp.lookup = lookup;
 Movie.lookup = lookup;
+Meetup.lookup = lookup;
 
 Weather.deleteByLocationId = deleteByLocationId;
 Yelp.deleteByLocationId = deleteByLocationId;
 Movie.deleteByLocationId = deleteByLocationId;
+Meetup.deleteByLocationId = deleteByLocationId;
 
 function getWeather (request, response) {
   Weather.lookup({
@@ -156,6 +159,38 @@ function getMovie (request, response) {
   });
 }
 
+
+function getMeetup (request, response) {
+  Meetup.lookup ({
+    tableName: Meetup.tableName,
+    cacheMiss: function () {
+      const url = `https://api.meetup.com/find/upcoming_events?&sign=true&photo-host=public&lon=${request.query.data.longitude}&page=20&lat=${request.query.data.latitude}&key=${process.env.MEETUP_API_KEY}`;
+
+      console.log('in the cacheMiss');
+      superagent.get(url)
+        .then((result) => {
+          const meetupSummaries = result.body.events.map( event => {
+            let summary = new Meetup(event);
+            summary.save(request.query.data.id);
+            return summary;
+          })
+          response.send(meetupSummaries);
+        })
+        .catch(error => handleError(error, response));
+    },
+    cacheHit: function (resultsArray) {
+      console.log('in the cacheHit');
+      let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
+      if (ageOfResultsInMinutes > 10080) {
+        Meetup.deleteByLocationId(Meetup.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  });
+}
+
 function handleError (error, response) {
   console.error(error);
   if(response) return response.status(500).send('Sorry something went terribly wrong.');
@@ -212,7 +247,7 @@ function Weather (day) {
 
 Weather.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (forecast, time, location_id) VALUES ($1, $2, $3, $4);`;
+    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
     const values = [this.forecast, this.time, this.created_at, location_id];
     client.query(SQL, values);
   }
@@ -220,7 +255,7 @@ Weather.prototype = {
 
 Yelp.prototype = {
   save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5);`;
+    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
     const values = [this.name, this.image_url, this.price, this.rating, this.url, location_id];
     client.query(SQL, values);
   }
@@ -234,9 +269,18 @@ Movie.prototype = {
   }
 }
 
+Meetup.prototype = {
+  save: function(location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
+    const values = [this.link, this.name, this.creation_date, this.host, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
 Weather.tableName = 'weathers';
 Yelp.tableName = 'yelps';
 Movie.tableName = 'movies';
+Meetup.tableName = 'meetups';
 
 function Yelp (food) {
   this.tableName = 'yelps';
@@ -249,6 +293,7 @@ function Yelp (food) {
 }
 
 function Movie (film) {
+  this.tableName = 'movies';
   this.title = film.title;
   this.overview = film.overview;
   this.average_votes = film.vote_average;
@@ -256,4 +301,12 @@ function Movie (film) {
   this.image_url = `https://image.tmdb.org/t/p/w500${film.poster_path}`;
   this.popularity = film.popularity;
   this.released_on = film.release_date;
+}
+
+function Meetup (event) {
+  this.tableName = 'meetups';
+  this.link = event.link;
+  this.name = event.name;
+  this.creation_date = event.creation_date;
+  this.host = event.host;
 }
