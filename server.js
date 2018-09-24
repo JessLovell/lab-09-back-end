@@ -74,6 +74,12 @@ Movie.deleteByLocationId = deleteByLocationId;
 Meetup.deleteByLocationId = deleteByLocationId;
 Trail.deleteByLocationId = deleteByLocationId;
 
+Weather.tableName = 'weathers';
+Yelp.tableName = 'yelps';
+Movie.tableName = 'movies';
+Meetup.tableName = 'meetups';
+Trail.tableName = 'trails';
+
 function getWeather (request, response) {
   Weather.lookup({
     tableName: Weather.tableName,
@@ -169,7 +175,6 @@ function getMeetup (request, response) {
     cacheMiss: function () {
       const url = `https://api.meetup.com/find/upcoming_events?&sign=true&photo-host=public&lon=${request.query.data.longitude}&page=20&lat=${request.query.data.latitude}&key=${process.env.MEETUP_API_KEY}`;
 
-      console.log('in the cacheMiss');
       superagent.get(url)
         .then((result) => {
           const meetupSummaries = result.body.events.map( event => {
@@ -182,10 +187,16 @@ function getMeetup (request, response) {
         .catch(error => handleError(error, response));
     },
     cacheHit: function (resultsArray) {
-      console.log('in the cacheHit');
       let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
       if (ageOfResultsInMinutes > 10080) {
         Meetup.deleteByLocationId(Meetup.tableName, request.query.data.id);
+        this.cacheMiss();
+      } else {
+        response.send(resultsArray);
+      }
+    }
+  });
+}
 
 function getTrail (request, response) {
   Trail.lookup({
@@ -196,14 +207,14 @@ function getTrail (request, response) {
       superagent.get(url)
         .then(result => {
           const trailSummaries = result.body.trails.map( trail => {
-            let summary = new Trail(trail); 
+            let summary = new Trail(trail);
             summary.save(request.query.data.id);
             return summary;
           })
           response.send(trailSummaries);
         })
         .catch(error => handleError(error, response));
-    }, 
+    },
     cacheHit: function(resultsArray) {
       let ageOfResultsInMinutes = (Date.now() - resultsArray[0].created_at) / (1000*60);
       if (ageOfResultsInMinutes > 60) {
@@ -213,7 +224,7 @@ function getTrail (request, response) {
         response.send(resultsArray);
       }
     }
-  })
+  });
 }
 
 function handleError (error, response) {
@@ -270,52 +281,6 @@ function Weather (day) {
   this.forecast = day.summary;
 }
 
-Weather.prototype = {
-  save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
-    const values = [this.forecast, this.time, this.created_at, location_id];
-    client.query(SQL, values);
-  }
-}
-
-Yelp.prototype = {
-  save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
-    const values = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
-    client.query(SQL, values);
-  }
-}
-
-Movie.prototype = {
-  save: function(location_id) {
-    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
-    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, this.created_at, location_id];
-    client.query(SQL, values);
-  }
-}
-
-Trail.prototype = {
-  save: function(location_id){
-    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) LIMIT 5;`;
-    const values = [this.name, this.location, this.length, this.stars, this.star_votes, this.summary, this.trail_url, this.conditions, this.condition_date, this.condition_time, this.created_at, location_id];
-    client.query(SQL, values);
-  }
-}
-
-Meetup.prototype = {
-  save: function(location_id) {
-    const SQL = `INSERT INTO ${this.tableName} (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
-    const values = [this.link, this.name, this.creation_date, this.host, this.created_at, location_id];
-    client.query(SQL, values);
-  }
-}
-
-Weather.tableName = 'weathers';
-Yelp.tableName = 'yelps';
-Movie.tableName = 'movies';
-Meetup.tableName = 'meetups';
-Trail.tableName = 'trails';
-
 function Yelp (food) {
   this.tableName = 'yelps';
   this.name = food.name;
@@ -359,4 +324,48 @@ function Meetup (event) {
   this.name = event.name;
   this.creation_date = event.creation_date;
   this.host = event.host;
+  this.created_at = Date.now();
 }
+
+Weather.prototype = {
+  save: function(location_id){
+    const SQL = `INSERT INTO ${this.tableName} (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
+    const values = [this.forecast, this.time, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Yelp.prototype = {
+  save: function(location_id){
+    const SQL = `INSERT INTO ${this.tableName} (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+    const values = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Movie.prototype = {
+  save: function(location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+    const values = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.released_on, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Trail.prototype = {
+  save: function(location_id){
+    const SQL = `INSERT INTO ${this.tableName} (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, condition_time, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) LIMIT 5;`;
+    const values = [this.name, this.location, this.length, this.stars, this.star_votes, this.summary, this.trail_url, this.conditions, this.condition_date, this.condition_time, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+Meetup.prototype = {
+  save: function(location_id) {
+    const SQL = `INSERT INTO ${this.tableName} (link, name, creation_date, host, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
+    const values = [this.link, this.name, this.creation_date, this.host, this.created_at, location_id];
+    client.query(SQL, values);
+  }
+}
+
+
+
